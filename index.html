@@ -1,0 +1,751 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Inhaler Coverage Finder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..800&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: control bar → plan summary strip → two-column workbench (drug list | detail), stacking on phones; modals for note + handout */
+:root{
+  --bg:#f4f6f5; --surface:#ffffff; --sunk:#e9edeb; --line:#d3dbd8; --ink:#13211d; --muted:#56655f;
+  --accent:#1d6a5a; --accent-ink:#ffffff; --accent-soft:#dcebe6; --scrim:rgba(10,20,17,.45);
+  --t1:#1f7a4c; --t1-bg:#ddf1e5; --t2:#1d6a8a; --t2-bg:#dcecf4; --t3:#8a5a00; --t3-bg:#f7ead0;
+  --t4:#a33a1e; --t4-bg:#f8e0d8; --np:#9b2335; --np-bg:#f6dde2; --un:#5f6b67; --un-bg:#e6eae8;
+  --display:"Archivo","Arial Narrow",system-ui,sans-serif; --body:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif; --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f1715; --surface:#16211e; --sunk:#1c2925; --line:#2c3b37; --ink:#e4ece9; --muted:#9aaba5;
+  --accent:#5fc2a8; --accent-ink:#0b1412; --accent-soft:#1d3a33; --scrim:rgba(0,0,0,.6);
+  --t1:#7bd6a1; --t1-bg:#173527; --t2:#79bfe0; --t2-bg:#16303d; --t3:#e8b75a; --t3-bg:#3a2c12;
+  --t4:#f0907a; --t4-bg:#3d1f17; --np:#f08c9c; --np-bg:#3d1820; --un:#a3b0ab; --un-bg:#243230; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1715; --surface:#16211e; --sunk:#1c2925; --line:#2c3b37; --ink:#e4ece9; --muted:#9aaba5;
+  --accent:#5fc2a8; --accent-ink:#0b1412; --accent-soft:#1d3a33; --scrim:rgba(0,0,0,.6);
+  --t1:#7bd6a1; --t1-bg:#173527; --t2:#79bfe0; --t2-bg:#16303d; --t3:#e8b75a; --t3-bg:#3a2c12;
+  --t4:#f0907a; --t4-bg:#3d1f17; --np:#f08c9c; --np-bg:#3d1820; --un:#a3b0ab; --un-bg:#243230; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.5}
+.wrap{max-width:1180px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:24px 48px;display:grid;gap:16px}
+header{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:6px 20px}
+h1{font-family:var(--display);font-stretch:85%;font-weight:800;font-size:clamp(26px,4vw,34px);letter-spacing:-.01em;margin:0;text-wrap:balance}
+h1 span{color:var(--accent)}
+.sub{color:var(--muted);font-size:13.5px;margin:0}
+.proto{font-family:var(--mono);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--t3);background:var(--t3-bg);padding:3px 8px;border-radius:4px}
+.controls{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr) 120px;gap:12px;align-items:end}
+@media (max-width:760px){.controls{grid-template-columns:1fr 110px}.controls .cplan{grid-column:1/-1}}
+label.lbl{display:block;font-size:11.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+select,input,textarea{width:100%;font:inherit;font-size:16px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink)}
+textarea{min-height:70px;resize:vertical}
+select:focus-visible,input:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.bar{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:var(--surface)}
+.seg button{font:inherit;font-size:13.5px;font-weight:600;padding:8px 14px;border:0;background:none;color:var(--ink);cursor:pointer}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink)}
+.filters{display:flex;flex-wrap:wrap;gap:6px}
+.chipbtn{font:inherit;font-size:13px;font-weight:600;padding:6px 11px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+.chipbtn[aria-pressed=true]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.agenote{font-size:13px;color:var(--muted)}
+.plan{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 16px;align-items:start}
+@media (max-width:560px){.plan{grid-template-columns:1fr}}
+.ptype{font-family:var(--mono);font-size:12px;font-weight:600;padding:5px 9px;border-radius:5px;background:var(--accent-soft);color:var(--accent);white-space:nowrap;align-self:start;justify-self:start}
+.plan h2{font-family:var(--display);font-stretch:90%;font-size:19px;margin:0 0 2px;font-weight:700}
+.plan p{margin:0;color:var(--muted);font-size:14px}
+.plan .facts{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:6px;font-size:13px;color:var(--muted)}
+.plan .facts b{color:var(--ink);font-weight:600}
+a{color:var(--accent)}
+.legend{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12.5px;color:var(--muted)}
+.bench{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:18px;align-items:start}
+@media (max-width:860px){.bench{grid-template-columns:1fr}}
+.list{display:grid;gap:14px}
+.cls h3{font-family:var(--display);font-stretch:85%;font-size:13px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin:0 0 6px;display:flex;justify-content:space-between;gap:8px}
+.cls h3 small{font-family:var(--body);font-weight:500;letter-spacing:0;text-transform:none}
+.rows{background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;width:100%;text-align:left;font:inherit;color:inherit;background:none;border:0;border-top:1px solid var(--line);padding:10px 14px;cursor:pointer}
+.row:first-child{border-top:0}
+.row:hover{background:var(--sunk)}
+.row[aria-current=true]{background:var(--accent-soft);box-shadow:inset 3px 0 0 var(--accent)}
+.row .nm{font-weight:600;font-size:14.5px}
+.row .gn{color:var(--muted);font-size:12.5px;display:block;overflow-wrap:anywhere}
+.tags{display:flex;gap:6px;align-items:center;justify-content:flex-end;flex-wrap:wrap}
+.flag{font-size:11.5px;font-weight:700;color:var(--np);white-space:nowrap}
+.edited{font-size:11.5px;font-weight:600;color:var(--t2);white-space:nowrap}
+.st{font-family:var(--mono);font-size:12px;font-weight:600;padding:3px 8px;border-radius:5px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.s1{color:var(--t1);background:var(--t1-bg)} .s2{color:var(--t2);background:var(--t2-bg)} .s3{color:var(--t3);background:var(--t3-bg)}
+.s4{color:var(--t4);background:var(--t4-bg)} .snp{color:var(--np);background:var(--np-bg)} .sun{color:var(--un);background:var(--un-bg)}
+.detail{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:20px;display:grid;gap:18px;position:sticky;top:calc(env(safe-area-inset-top,0px) + 12px);max-height:calc(100vh - 24px);overflow:auto}
+@media (max-width:860px){.detail{position:static;max-height:none}}
+.dhead h2{font-family:var(--display);font-stretch:88%;font-size:clamp(22px,3vw,27px);font-weight:800;margin:0;text-wrap:balance}
+.dhead p{margin:2px 0 0;color:var(--muted);font-size:13.5px}
+.actions{display:flex;flex-wrap:wrap;gap:8px}
+.btn{font:inherit;font-size:14px;font-weight:600;padding:9px 14px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);cursor:pointer}
+.btn.ghost{background:var(--surface);color:var(--accent)}
+.btn.quiet{border-color:var(--line);background:var(--surface);color:var(--ink)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.verdict{display:grid;grid-template-columns:auto minmax(0,1fr);gap:12px;align-items:center;padding:12px 14px;border-radius:9px;background:var(--sunk)}
+.verdict .st{font-size:14px;padding:6px 10px}
+.verdict p{margin:0;font-size:14px}
+.warn{padding:10px 12px;border-radius:8px;background:var(--t3-bg);color:var(--t3);font-size:13.5px;font-weight:600}
+section.blk h4{font-size:11.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+.strength{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;align-items:center;margin-bottom:10px}
+.strength label{font-size:13px;font-weight:600}
+.alts{display:grid;gap:6px}
+.alt{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;font:inherit;color:inherit;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:9px 12px;cursor:pointer}
+.alt:hover{border-color:var(--accent)}
+.alt .nm{font-weight:600;font-size:14px}
+.alt .gn{display:block;color:var(--muted);font-size:12.5px}
+.alt .dose{display:block;font-family:var(--mono);font-size:12px;color:var(--accent);margin-top:2px}
+.empty{color:var(--muted);font-size:14px;margin:0}
+.fine{color:var(--muted);font-size:12.5px;margin:6px 0 0}
+.progs{display:grid;gap:8px;margin:0;padding:0;list-style:none}
+.progs li{border-left:3px solid var(--accent);padding:2px 0 2px 12px;font-size:14px}
+.progs li.gen{border-left-color:var(--line)}
+.progs li b{display:block;font-weight:600}
+.progs li span{color:var(--muted);font-size:13px;overflow-wrap:anywhere}
+.notes{margin:0;padding-left:18px;font-size:13.5px;display:grid;gap:4px}
+.panel{border:1px solid var(--line);border-radius:9px;padding:12px;display:grid;gap:10px;background:var(--sunk)}
+.panel .two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+@media (max-width:480px){.panel .two{grid-template-columns:1fr}}
+.rej{display:grid;gap:6px;margin:0;padding:0;list-style:none}
+.rej li{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;font-size:13.5px;padding:8px 10px;border-radius:7px;background:var(--np-bg);color:var(--ink)}
+.rej li.done{background:var(--sunk);color:var(--muted)}
+.rej li b{color:var(--np)} .rej li.done b{color:var(--muted)}
+.rej button{font:inherit;font-size:12.5px;font-weight:600;border:0;background:none;color:var(--accent);cursor:pointer;white-space:nowrap}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:8px;font-size:14px;font-weight:600;z-index:50}
+.modal{position:fixed;inset:0;background:var(--scrim);display:grid;place-items:center;z-index:40;padding:calc(16px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) calc(16px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.sheet{background:var(--surface);color:var(--ink);border-radius:12px;max-width:720px;width:100%;max-height:100%;overflow:auto;padding:20px;display:grid;gap:14px}
+.sheet h3{font-family:var(--display);font-stretch:88%;font-size:21px;margin:0}
+.sheet pre{margin:0;white-space:pre-wrap;font-family:var(--mono);font-size:13px;line-height:1.55;background:var(--sunk);padding:14px;border-radius:8px;overflow-wrap:anywhere}
+.handout{background:#ffffff;color:#1a2421;border:1px solid var(--line);border-radius:8px;padding:22px;font-size:16px;line-height:1.55;display:grid;gap:12px}
+.handout h4{font-family:var(--display);font-stretch:90%;font-size:24px;margin:0;color:#174f43}
+.handout h5{font-size:15px;margin:6px 0 0;color:#174f43;text-transform:uppercase;letter-spacing:.06em}
+.handout p,.handout ul{margin:0}
+.handout ul{padding-left:20px;display:grid;gap:4px}
+.handout .big{font-size:19px;font-weight:700}
+.handout .small{font-size:13px;color:#4f5c58}
+footer{border-top:1px solid var(--line);padding-top:16px;color:var(--muted);font-size:12.5px;display:grid;gap:8px;max-width:80ch}
+footer p{margin:0}
+</style>
+<style>body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style>
+</head>
+<body>
+
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Inhaler <span>Coverage</span> Finder</h1>
+      <p class="sub">Asthma inhalers on North Carolina plans · 2026 formularies</p>
+    </div>
+    <span class="proto">Data as of May 2026 · verify before prescribing</span>
+  </header>
+
+  <div class="controls">
+    <div class="cplan">
+      <label class="lbl" for="plan">Patient's insurance</label>
+      <select id="plan"></select>
+    </div>
+    <div>
+      <label class="lbl" for="q">Find an inhaler</label>
+      <input id="q" type="search" placeholder="Brand or generic">
+    </div>
+    <div>
+      <label class="lbl" for="age">Patient age</label>
+      <input id="age" type="number" min="0" max="110" inputmode="numeric" placeholder="Any">
+    </div>
+  </div>
+
+  <div class="bar">
+    <div class="seg" id="role" role="group" aria-label="Rescue or controller">
+      <button type="button" data-r="all" aria-pressed="true">All</button>
+      <button type="button" data-r="rescue" aria-pressed="false">Rescue</button>
+      <button type="button" data-r="controller" aria-pressed="false">Controller</button>
+    </div>
+    <div class="filters" id="filters" role="group" aria-label="Filter by drug class"></div>
+    <span class="agenote" id="agenote"></span>
+  </div>
+
+  <div class="plan" id="planbox"></div>
+
+  <div class="legend" aria-label="Status legend">
+    <span class="st s1">Tier 1 / Preferred</span><span class="st s2">Tier 2</span><span class="st s3">Tier 3</span><span class="st s4">Tier 4–5</span><span class="st snp">PA / not covered</span><span class="st sun">Not on chart</span>
+    <span>Lower tier usually means a lower copay.</span>
+  </div>
+
+  <div class="bench">
+    <div class="list" id="list"></div>
+    <aside class="detail" id="detail" aria-live="polite"></aside>
+  </div>
+
+  <footer>
+    <p><b>Data.</b> Coverage comes from the UNC Pulmonary <a href="https://www.med.unc.edu/medicine/pulmonary/wp-content/uploads/sites/1321/2026/05/Inhalers-and-Insurance-Chart-2026-1.pdf" target="_blank" rel="noopener">NC Insurance Plans and Preferred Formulary Inhalers (2026)</a> chart (May 2026), which lists mostly preferred agents. "Not on chart" means the chart doesn't list it, not that it's excluded. Assistance programs and cash estimates come from the Partners For Kids <a href="https://partnersforkids.org/wp-content/uploads/2026/07/Asthma-Inhaler-Patient-Assistance-Programs-7.1.26.pdf" target="_blank" rel="noopener">Inhaler Patient Assistance Programs</a> chart (July 2026); cash prices are GoodRx estimates and vary by pharmacy.</p>
+    <p><b>Dose matching</b> uses GINA low/medium/high ICS dose categories for ages 12 and up. Children use different ranges. Medicare figures: $2,100 Part D out-of-pocket cap and $615 maximum deductible for 2026. Some formulary links in the source chart point to prior-year documents.</p>
+  </footer>
+</div>
+<div id="modalroot"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+const CLASSES=[
+ {id:"saba",name:"Rescue (SABA)",role:"rescue"},
+ {id:"icssaba",name:"Rescue (ICS/SABA)",role:"rescue"},
+ {id:"ics",name:"Controller (ICS)",role:"controller"},
+ {id:"icslaba",name:"Controller (ICS/LABA)",role:"controller"},
+ {id:"lama",name:"Add-on (LAMA)",role:"controller"},
+ {id:"triple",name:"Triple (ICS/LAMA/LABA)",role:"controller"}
+];
+// min: FDA min age (yrs); max: labeled upper age where relevant. cash: [low est., text]
+const DRUGS=[
+ {id:"alb",n:"Albuterol HFA",g:"albuterol · generic",c:"saba",dev:"mdi",min:4,cash:[32,"~$32 generic"]},
+ {id:"vent",n:"Ventolin HFA",g:"albuterol · brand",c:"saba",dev:"mdi",min:4,brand:1,cash:[63,"~$63"],p:["GSK35"]},
+ {id:"leva",n:"Levalbuterol HFA",g:"levalbuterol · generic",c:"saba",dev:"mdi",min:4},
+ {id:"xop",n:"Xopenex HFA",g:"levalbuterol · brand",c:"saba",dev:"mdi",min:4,brand:1},
+ {id:"proair",n:"ProAir RespiClick",g:"albuterol · brand",c:"saba",dev:"dpi",min:4,brand:1},
+ {id:"albneb",n:"Albuterol nebs",g:"albuterol · generic",c:"saba",dev:"neb",min:2,neb:1},
+ {id:"levaneb",n:"Levalbuterol nebs",g:"levalbuterol · generic",c:"saba",dev:"neb",min:6,neb:1},
+ {id:"airs",n:"Airsupra",g:"albuterol/budesonide",c:"icssaba",dev:"mdi",min:18,brand:1,p:["AZ35","AZME"],ics:1},
+ {id:"fphfa",n:"Fluticasone propionate HFA",g:"generic Flovent HFA (brand discontinued)",c:"ics",dev:"mdi",min:4,cash:[136,"$136–252 generic"],p:["RXO"],ics:1},
+ {id:"fpdisk",n:"Fluticasone propionate Diskus",g:"generic Flovent Diskus",c:"ics",dev:"dpi",min:4,cash:[124,"$124–175 generic"],ics:1},
+ {id:"arn",n:"Arnuity Ellipta",g:"fluticasone furoate · generic available",c:"ics",dev:"dpi1",min:5,brand:1,cash:[138,"$138–169 generic · $218–286 brand"],p:["GSK35","GSKPAP"],ics:1},
+ {id:"qvar",n:"QVAR RediHaler",g:"beclomethasone",c:"ics",dev:"bai",min:4,brand:1,cash:[197,"$197–264"],ics:1},
+ {id:"asmh",n:"Asmanex HFA",g:"mometasone",c:"ics",dev:"mdi",min:5,brand:1,cash:[104,"$104–129"],p:["ORG15"],ics:1},
+ {id:"asmt",n:"Asmanex Twisthaler",g:"mometasone",c:"ics",dev:"dpi",min:4,brand:1,cash:[104,"$104–111"],p:["ORG15"],ics:1},
+ {id:"pflex",n:"Pulmicort Flexhaler",g:"budesonide",c:"ics",dev:"dpi",min:6,brand:1,cash:[196,"$196–261"],p:["PULM20"],ics:1},
+ {id:"alv",n:"Alvesco",g:"ciclesonide",c:"ics",dev:"mdi",min:12,brand:1,cash:[146,"$146–155"],p:["ALV60"],ics:1},
+ {id:"budneb",n:"Budesonide nebs",g:"budesonide respules · generic",c:"ics",dev:"neb",min:1,max:8,neb:1,ics:1},
+ {id:"pneb",n:"Pulmicort Respules",g:"budesonide · brand",c:"ics",dev:"neb",min:1,max:8,brand:1,neb:1,ics:1},
+ {id:"fsd",n:"Fluticasone/salmeterol Diskus",g:"generic Advair Diskus, incl. Wixela Inhub",c:"icslaba",dev:"dpi",min:4,cash:[55,"$55–100 generic"],p:["WIX10","VIATRIS"],ics:1},
+ {id:"advd",n:"Advair Diskus",g:"fluticasone/salmeterol · brand",c:"icslaba",dev:"dpi",min:4,brand:1,cash:[168,"$168–273"],p:["GSK35"],ics:1},
+ {id:"advh",n:"Advair HFA",g:"fluticasone/salmeterol · brand",c:"icslaba",dev:"mdi",min:12,brand:1,cash:[260,"$260–431"],p:["GSK35"],ics:1},
+ {id:"fshfa",n:"Fluticasone/salmeterol HFA",g:"generic Advair HFA",c:"icslaba",dev:"mdi",min:12,cash:[190,"$190–297 generic"],ics:1},
+ {id:"fsrc",n:"Fluticasone/salmeterol RespiClick",g:"generic AirDuo (brand discontinued)",c:"icslaba",dev:"dpi",min:12,cash:[74,"~$74 generic"],ics:1},
+ {id:"bfg",n:"Budesonide/formoterol HFA",g:"generic Symbicort, incl. Breyna",c:"icslaba",dev:"mdi",min:6,cash:[78,"$78–97 generic"],p:["VIATRIS"],ics:1},
+ {id:"symb",n:"Symbicort",g:"budesonide/formoterol · brand",c:"icslaba",dev:"mdi",min:6,brand:1,cash:[213,"$213–244"],p:["AZ35","AZME"],ics:1},
+ {id:"dul",n:"Dulera",g:"mometasone/formoterol",c:"icslaba",dev:"mdi",min:5,brand:1,cash:[199,"~$199"],p:["ORG15"],ics:1},
+ {id:"breo",n:"Breo Ellipta",g:"fluticasone furoate/vilanterol · brand",c:"icslaba",dev:"dpi1",min:5,brand:1,cash:[405,"~$405"],p:["GSK35","GSKPAP"],ics:1},
+ {id:"fvg",n:"Fluticasone/vilanterol",g:"generic Breo Ellipta",c:"icslaba",dev:"dpi1",min:5,cash:[230,"~$230 generic"],ics:1},
+ {id:"spir",n:"Spiriva Respimat 1.25 mcg",g:"tiotropium",c:"lama",dev:"smi",min:6,brand:1,cash:[524,"~$524"],p:["BI35","BICARES"]},
+ {id:"trel",n:"Trelegy Ellipta",g:"fluticasone furoate/umeclidinium/vilanterol",c:"triple",dev:"dpi1",min:18,brand:1,cash:[676,"~$676"],p:["GSK35","GSKPAP"],ics:1}
+];
+const D=Object.fromEntries(DRUGS.map(d=>[d.id,d]));
+// same molecule & device pairs (brand ↔ generic), listed first on ties
+const MOL={symb:"bf",bfg:"bf",advd:"fsd",fsd:"fsd",advh:"fsh",fshfa:"fsh",breo:"fv",fvg:"fv",vent:"alb",alb:"alb",xop:"lev",leva:"lev",pneb:"bud",budneb:"bud"};
+const DEV={mdi:"MDI + spacer",dpi:"Dry powder inhaler",dpi1:"Dry powder inhaler, once daily",bai:"Breath-actuated (no spacer)",neb:"Nebulizer",smi:"Soft mist inhaler"};
+
+// Strengths with GINA dose level (ages 12+). L=low M=medium H=high
+const STR={
+ fphfa:[["44 mcg","2 puffs twice daily","L"],["110 mcg","2 puffs twice daily","M"],["220 mcg","2 puffs twice daily","H"]],
+ fpdisk:[["100 mcg","1 inhalation twice daily","L"],["250 mcg","1 inhalation twice daily","M"],["250 mcg","2 inhalations twice daily","H"]],
+ arn:[["100 mcg","1 inhalation once daily","LM"],["200 mcg","1 inhalation once daily","H"]],
+ qvar:[["40 mcg","2 puffs twice daily","L"],["80 mcg","2 puffs twice daily","M"],["80 mcg","4 puffs twice daily","H"]],
+ asmh:[["100 mcg","2 puffs twice daily","LM"],["200 mcg","2 puffs twice daily","H"]],
+ asmt:[["220 mcg","1 inhalation once daily","L"],["220 mcg","2 inhalations once daily","M"],["220 mcg","2 inhalations twice daily","H"]],
+ pflex:[["90 mcg","2 inhalations twice daily","L"],["180 mcg","2 inhalations twice daily","M"],["180 mcg","4 inhalations twice daily","H"]],
+ alv:[["80 mcg","1 puff twice daily","L"],["160 mcg","1 puff twice daily","M"],["160 mcg","2 puffs twice daily","H"]],
+ bfg:[["80/4.5","2 puffs twice daily","L"],["160/4.5","2 puffs twice daily","M"]],
+ symb:[["80/4.5","2 puffs twice daily","L"],["160/4.5","2 puffs twice daily","M"]],
+ dul:[["100/5","2 puffs twice daily","M"],["200/5","2 puffs twice daily","H"]],
+ fsd:[["100/50","1 inhalation twice daily","L"],["250/50","1 inhalation twice daily","M"],["500/50","1 inhalation twice daily","H"]],
+ advd:[["100/50","1 inhalation twice daily","L"],["250/50","1 inhalation twice daily","M"],["500/50","1 inhalation twice daily","H"]],
+ advh:[["45/21","2 puffs twice daily","L"],["115/21","2 puffs twice daily","M"],["230/21","2 puffs twice daily","H"]],
+ fshfa:[["45/21","2 puffs twice daily","L"],["115/21","2 puffs twice daily","M"],["230/21","2 puffs twice daily","H"]],
+ fsrc:[["113/14","1 inhalation twice daily","L"],["232/14","1 inhalation twice daily","M"]],
+ breo:[["100/25","1 inhalation once daily","LM"],["200/25","1 inhalation once daily","H"]],
+ fvg:[["100/25","1 inhalation once daily","LM"],["200/25","1 inhalation once daily","H"]],
+ trel:[["100/62.5/25","1 inhalation once daily","M"],["200/62.5/25","1 inhalation once daily","H"]]
+};
+const LVL={L:"low",M:"medium",H:"high"};
+function lvlText(s){return s.split("").map(c=>LVL[c]).join("–")}
+
+const PROGS={
+ GSK35:{n:"GSK $35/month cap",pt:"GSK savings: pay no more than $35 a month",d:"Pays down to $35 a month for one inhaler.",site:"gskforyou.com",u:"https://gskforyou.com/programs/gsk-coupons-free-trials/",elig:["commercial","uninsured"],cap:35},
+ GSKPAP:{n:"GSK Patient Assistance Program",pt:"GSK Patient Assistance: free medicine if you qualify by income",d:"Free medication if income-eligible; some Medicare Part D patients may qualify.",site:"gskforyou.com",u:"https://www.gskforyou.com/",elig:["uninsured","medicare"]},
+ AZ35:{n:"AstraZeneca $35/month cap",pt:"AstraZeneca savings: pay no more than $35 a month",d:"Pays down to $35 a month; covers commercially insured and uninsured patients.",site:"azpatientsupport.com",u:"https://www.azpatientsupport.com/",elig:["commercial","uninsured"],cap:35},
+ AZME:{n:"AZ&Me Prescription Savings",pt:"AZ&Me: help based on income",d:"Income-based help; may cover some Medicare patients.",site:"azpatientsupport.com",u:"https://www.azpatientsupport.com/",elig:["uninsured","medicare"]},
+ BI35:{n:"Boehringer Ingelheim $35/month cap",pt:"Spiriva savings: pay no more than $35 a month",d:"Pays down to $35 a month.",site:"spiriva.com",u:"https://patient.boehringer-ingelheim.com/us/products/spiriva/asthma/savings-and-support/sign-up-for-savings",elig:["commercial","uninsured"],cap:35},
+ BICARES:{n:"BI Cares Patient Assistance",pt:"BI Cares: free medicine if you qualify",d:"Free medication if eligible; may include some Medicare patients.",site:"boehringer-ingelheim.com (BI Cares)",u:"https://www.boehringer-ingelheim.com/us/about-us/sustainable-development/our-commitment/bi-cares-patient-assistance-portal",elig:["uninsured","medicare"]},
+ ORG15:{n:"Organon savings card",pt:"Savings card: copay as low as $15",d:"Copay as low as $15 (up to $90 off per fill). Commercial insurance only.",site:"asmanex.com / dulera.com",u:"https://www.dulera.com/savings-offer/",elig:["commercial"]},
+ PULM20:{n:"Pulmicort Flexhaler savings card",pt:"Savings card: copay $20",d:"Copay $20 (up to $50 off). Commercial insurance only.",site:"pulmicortflexhaler.com",u:"https://rubiconpharm.com/Pulmicort/Pulmicort_Coupon.pdf",elig:["commercial"]},
+ ALV60:{n:"Alvesco savings",pt:"Alvesco savings: $60 copay, or free if you qualify",d:"Commercial: $60 copay (up to $175 off). Uninsured: $60 through home delivery, or free if eligible.",site:"alvesco.com/savings",u:"https://www.alvesco.com/savings",elig:["commercial","uninsured"],cap:60},
+ WIX10:{n:"Wixela Inhub savings card",pt:"Wixela savings card: copay $10",d:"Copay $10 (up to $50 off). Commercial insurance only.",site:"wixela.com",u:"https://www.wixela.com/en/savings-offer",elig:["commercial"]},
+ VIATRIS:{n:"Viatris Patient Assistance (Wixela, Breyna)",pt:"Viatris Patient Assistance: free medicine if you qualify",d:"Free medication if eligible.",site:"viatris.com/pap",u:"https://www.viatris.com/en-us/lm/united-states/patient-assistance-program",elig:["uninsured"]},
+ RXO:{n:"Rx Outreach (Prasco fluticasone HFA)",pt:"Rx Outreach: free medicine if you qualify",d:"Free medication if eligible.",site:"rxoutreach.org",u:"https://rxoutreach.org/prasco/",elig:["uninsured"]}
+};
+
+const TYPE_LABEL={commercial:"Commercial",medicare:"Medicare",medicaid:"Medicaid",tricare:"TRICARE",pap:"Assistance program",uninsured:"Uninsured"};
+const TYPE_FACTS={commercial:["Copay cards","allowed"],medicare:["Copay cards","not allowed"],medicaid:["Copay cards","not allowed"],tricare:["Copay cards","not allowed"],pap:["Copay cards","n/a"],uninsured:["Copay cards","cash programs apply"]};
+
+const PLANS=[
+ {id:"ncmed",grp:"NC Medicaid & UNC",n:"NC Medicaid (Direct & Tailored Plans)",t:"medicaid",unl:"NP",link:"https://medicaid.ncdhhs.gov/providers/programs-and-services/prescription-drugs/preferred-drug-list",
+  list:"budneb:P alv:P arn:P asmh:P asmt:P fpdisk:P fphfa:P pflex:P qvar:P albneb:P xop:P vent:P spir:P advd:P advh:P dul:P symb:P trel:NP",
+  note:"Preferred agents pay without PA. Anything else is non-preferred and needs PA. Brand Ventolin is preferred over generic albuterol HFA.",
+  notes:{trel:"Non-preferred: PA requires failure of two other agents."}},
+ {id:"uncpap",grp:"NC Medicaid & UNC",n:"UNC Pharmacy Assistance Program (PAP)",t:"pap",unl:"X",tier2PA:1,link:"https://prime.adaptiverx.com/webSearch/index?key=cnhmbGV4LnBsYW4uUGxhblBkZlR5cGUtNDQ1",
+  list:"arn:1 fphfa:2 qvar:2 budneb:2 albneb:1 alb:1 spir:1 fsd:1 bfg:2 symb:2 trel:2",
+  note:"For eligible uninsured UNC Health patients. Tier 2 requires PA. Drugs not listed are not on the PAP formulary."},
+ {id:"uncnhp",grp:"NC Medicaid & UNC",n:"UNC Network Health Plan (employees)",t:"commercial",unl:"?",link:"https://ncstoragemlunchealthcare.blob.core.windows.net/public/pdf-unc-RxSense-Standard-Performance-Effective-01.2026-FINAL.pdf",
+  list:"budneb:1 asmh:2 pflex:2 pneb:3 albneb:1 alb:1 leva:1 spir:2 fsd:1 bfg:1 breo:2 airs:2 trel:2",
+  note:"UNC Health employee plan. This is not the NC State Health Plan."},
+ {id:"shpaetna",grp:"NC State Health Plan",n:"NC State Health Plan (Aetna)",t:"commercial",unl:"?",link:"https://www.shpnc.gov/documents/pharmacy-documents/ncshp-preferred-drug-list/download",
+  list:"budneb:1 fpdisk:1 pflex:2 asmh:2 pneb:3 albneb:1 alb:1 leva:1 levaneb:1 spir:2 bfg:1 fshfa:1 fsd:1 breo:2 airs:2 trel:2",
+  note:"Certain NDCs aren't covered; check the formulary before sending.",
+  notes:{budneb:"0.25 and 0.5 mg are Tier 1; 1 mg is Tier 2.",pneb:"Some NDCs not covered."}},
+ {id:"shphumana",grp:"NC State Health Plan",n:"NC State Health Plan Retiree (Humana Medicare Advantage)",t:"medicare",unl:"?",link:"https://www.shpnc.gov/documents/open-enrollment-documents/2026-comprehensive-formulary-humana/download?attachment",
+  list:"budneb:1 arn:2 alv:3 asmt:3 asmh:3 pflex:3 pneb:3 qvar:3 fphfa:3 fpdisk:3 albneb:1 alb:1 levaneb:1 leva:1 vent:2 proair:3 xop:3 spir:2 fsd:1 advh:2 breo:2 symb:2 advd:3 fsrc:3 fshfa:3 dul:3 airs:2 trel:2",
+  note:"Medicare Advantage with drug coverage."},
+ {id:"bcbsc",grp:"Blue Cross NC",n:"BCBS NC Essential C",t:"commercial",unl:"?",card:"Rx C",link:"https://www.myprime.com/content/dam/prime/memberportal/WebDocs/2024/Formularies/HIM/2024_NC_5T_HealthInsuranceMarketplace.pdf",
+  list:"budneb:2 arn:3 asmh:3 asmt:3 qvar:3 fphfa:4 albneb:1 levaneb:2 alb:2 vent:3 spir:3 fsd:2 fsrc:2 symb:2 advh:3 breo:3 dul:3 airs:3 trel:3"},
+ {id:"bcbsq",grp:"Blue Cross NC",n:"BCBS NC Essential Q",t:"commercial",unl:"?",card:"Rx D or F",link:"https://www.myprime.com/content/dam/prime/memberportal/WebDocs/2024/Formularies/HIM/2024_NC_5T_HealthInsuranceMarketplace.pdf",
+  list:"budneb:2 arn:3 asmh:3 asmt:3 qvar:3 albneb:1 levaneb:1 alb:2 vent:3 spir:3 fsd:2 symb:2 breo:3 dul:3 advh:3 fshfa:3 airs:3 trel:3"},
+ {id:"bcbsqs",grp:"Blue Cross NC",n:"BCBS NC Essential QS",t:"commercial",unl:"?",card:"Rx D or F",link:"https://www.myprime.com/content/dam/prime/memberportal/WebDocs/2025/Formularies/HIM/2025_NC_4T_HealthInsuranceMarketplace.pdf",
+  list:"budneb:1 qvar:2 asmt:2 asmh:2 arn:2 albneb:1 alb:1 levaneb:1 vent:2 spir:2 fshfa:1 fsd:1 symb:1 advh:2 dul:2 breo:2 airs:2 trel:2"},
+ {id:"bcbs4t",grp:"Blue Cross NC",n:"BCBS NC Enhanced 4-Tier",t:"commercial",unl:"?",card:"Rx A",
+  list:"budneb:1 qvar:2 asmh:2 asmt:2 arn:2 alv:3 fphfa:3 fpdisk:3 pneb:3 pflex:3 albneb:1 levaneb:1 vent:2 alb:3 leva:3 xop:3 proair:3 spir:2 fsd:1 fsrc:1 bfg:1 breo:2 advh:2 dul:2 fvg:3 advd:3 fshfa:3 symb:3 airs:2 trel:2",
+  note:"Brand Ventolin sits on a lower tier than generic albuterol HFA here."},
+ {id:"bcbs5t",grp:"Blue Cross NC",n:"BCBS NC Enhanced 5-Tier",t:"commercial",unl:"?",card:"Rx B",
+  list:"budneb:2 qvar:3 asmh:3 asmt:3 arn:3 alv:4 fphfa:4 fpdisk:4 pneb:4 pflex:4 albneb:1 levaneb:2 alb:2 vent:3 leva:4 xop:4 proair:4 spir:3 fsd:2 fsrc:2 bfg:2 breo:3 advh:3 dul:3 fvg:4 advd:4 fshfa:4 symb:4 airs:3 trel:3",
+  notes:{albneb:"0.083% is Tier 1; other strengths Tier 2.",alb:"Some NDCs are Tier 4."}},
+ {id:"fep",grp:"Federal & military",n:"Federal Employee Program (Caremark) – Standard",t:"commercial",unl:"?",link:"https://www.caremark.com/portal/asset/z6500_drug_list.pdf",
+  list:"budneb:1 fpdisk:1 fphfa:1 pflex:2 qvar:2 arn:2 pneb:3 asmt:3 asmh:3 alv:3 albneb:1 alb:1 levaneb:1 leva:1 proair:2 vent:3 xop:3 spir:2 bfg:1 fsd:1 fsrc:1 fvg:1 dul:2 advd:3 advh:3 symb:3 breo:3 airs:3 trel:2",
+  note:"Standard Option shown. Basic Option drops Alvesco, Ventolin and Xopenex. Blue Focus covers Tier 1–2 only."},
+ {id:"tricare",grp:"Federal & military",n:"TRICARE (Express Scripts)",t:"tricare",unl:"NP",
+  list:"fphfa:P fpdisk:P budneb:P asmh:P asmt:P alv:P albneb:P alb:P proair:P levaneb:P spir:P advh:P advd:P fshfa:P fsd:P trel:P",
+  note:"Preferred agents covered at mail order. Non-preferred agents need PA."},
+ {id:"cigna",grp:"Other commercial",n:"Cigna (Standard 4-Tier)",t:"commercial",unl:"?",link:"https://www.cigna.com/static/www-cigna-com/docs/individuals-families/member-resources/prescription/standard-4-tier-spec.pdf",
+  list:"budneb:1 arn:2 asmh:2 asmt:2 qvar:2 albneb:1 alb:1 spir:2 fsd:1 bfg:1 advh:2 breo:2 dul:2 airs:2 trel:2"},
+ {id:"cvs",grp:"Other commercial",n:"CVS Caremark (template formulary)",t:"commercial",unl:"?",link:"https://www.caremark.com/portal/asset/caremark_recaprxclaimsdruglist.pdf",
+  list:"budneb:P pflex:P asmh:P albneb:P alb:P leva:P spir:P breo:P bfg:P fsd:P airs:P trel:P",
+  note:"Untiered list of preferred agents. Generics are first line."},
+ {id:"esi",grp:"Other commercial",n:"Express Scripts (commercial)",t:"commercial",unl:"?",link:"https://www.express-scripts.com/art/open_enrollment/SB_Members_Formulary.pdf",
+  list:"budneb:P asmh:P asmt:P pflex:P qvar:P arn:P albneb:P alb:P vent:P spir:P advh:P dul:P breo:P fsd:P bfg:P airs:P trel:P",
+  note:"Untiered list of preferred agents."},
+ {id:"aetnastd",grp:"Other commercial",n:"Aetna Standard",t:"commercial",unl:"?",link:"https://www.aetna.com/content/dam/aetna/pdfs/aetnacom/individuals-families-health-insurance/document-library/pharmacy/2025-Drug-guide-Aetna-Standard-Plan.pdf",
+  list:"budneb:P pflex:P asmh:P albneb:P alb:P leva:P spir:P breo:P fsd:P bfg:P airs:P trel:P",
+  note:"Untiered list of preferred agents. Generics are lowest cost."},
+ {id:"aetnama",grp:"Medicare (Part D & Advantage)",n:"Aetna Medicare Advantage",t:"medicare",unl:"?",link:"https://www.aetna.com/medicare/documents/individual/2025/formularies/FORM_2025_25101B25zPPOB_EN.pdf",
+  list:"budneb:1 arn:2 alv:3 asmh:3 asmt:3 fpdisk:3 fphfa:3 pflex:3 qvar:3 alb:1 albneb:1 levaneb:1 leva:2 vent:3 spir:3 fsd:1 bfg:1 airs:2 breo:2 advd:3 advh:3 fvg:3 symb:3 fshfa:4 dul:4 trel:2",
+  notes:{fsd:"Generic is Tier 1; Wixela Inhub is Tier 2."}},
+ {id:"bcbsmed",grp:"Medicare (Part D & Advantage)",n:"Blue Cross NC Medicare Part D (Standard)",t:"medicare",unl:"?",link:"https://www.bluecrossnc.com/content/dam/bcbsnc/pdf/members/medicare/forms-library/formulary/dl-rx-standard-pdp-26.pdf",
+  list:"asmh:3 asmt:3 arn:3 budneb:4 alb:3 vent:3 albneb:4 spir:3 advh:3 breo:3 dul:3 fsrc:3 fsd:3 bfg:4 trel:3",
+  notes:{albneb:"0.5% strength is Tier 3."}},
+ {id:"healthspring",grp:"Medicare (Part D & Advantage)",n:"Healthspring Rx Part D (Assurance / Extra Help)",t:"medicare",unl:"?",link:"https://www.healthspring.com/static/docs/medicare/plans/2026/formulary-assurance.pdf",
+  list:"arn:3 budneb:4 albneb:2 alb:3 vent:3 spir:4 advh:3 breo:3 trel:3"},
+ {id:"esimed",grp:"Medicare (Part D & Advantage)",n:"Express Scripts Medicare Part D",t:"medicare",unl:"?",
+  list:"budneb:1 asmh:1 asmt:1 qvar:2 alv:2 pflex:2 fphfa:2 albneb:1 alb:1 spir:2 fsd:1 bfg:1 advh:2 breo:2 dul:2 trel:2"},
+ {id:"humanapdp",grp:"Medicare (Part D & Advantage)",n:"Humana PDP (Basic, Premier, Walmart Value)",t:"medicare",unl:"?",link:"https://www.humana.com/pharmacy/prescription-coverages/medicare-drug-list",
+  list:"arn:3 budneb:4 albneb:2 vent:3 alb:3 spir:3 symb:3 breo:3 dul:4 trel:3",
+  notes:{alb:"Premier Rx only.",dul:"Basic and Walmart Value plans."}},
+ {id:"silverscript",grp:"Medicare (Part D & Advantage)",n:"Aetna SilverScript Choice",t:"medicare",unl:"?",link:"https://www.aetna.com/medicare/documents/individual/2025/formularies/FORM_2025_25093A1z_EN.pdf",
+  list:"arn:3 budneb:4 alv:4 levaneb:2 alb:3 vent:3 albneb:4 spir:4 fsd:2 breo:3 dul:4 fshfa:4 trel:3",
+  notes:{levaneb:"0.63 and 1.25 mg/3 mL are Tier 2; other strengths Tier 4."}},
+ {id:"uhcsaver",grp:"Medicare (Part D & Advantage)",n:"UnitedHealthcare AARP Medicare Rx Saver",t:"medicare",unl:"?",link:"https://www.aarpmedicareplans.com/plan-documents.html",
+  list:"pflex:3 budneb:4 fphfa:4 alb:2 vent:3 albneb:3 spir:3 breo:3 fsrc:3 fsd:3 symb:3 dul:4 airs:3 trel:3"},
+ {id:"uhcpref",grp:"Medicare (Part D & Advantage)",n:"UnitedHealthcare AARP Medicare Rx Preferred",t:"medicare",unl:"?",link:"https://www.aarpmedicareplans.com/plan-documents.html",
+  list:"qvar:3 arn:3 budneb:4 alb:2 albneb:2 vent:3 leva:3 levaneb:4 spir:3 breo:3 fsd:3 symb:3 dul:4 airs:3 trel:3"},
+ {id:"uhcma",grp:"Medicare (Part D & Advantage)",n:"UnitedHealthcare AARP Medicare Advantage Choice",t:"medicare",unl:"?",link:"https://www.aarpmedicareplans.com/plan-documents.html",
+  list:"arn:3 qvar:3 budneb:4 alb:2 albneb:2 leva:3 vent:3 levaneb:4 spir:3 breo:3 fsd:3 symb:3 dul:4 trel:3"},
+ {id:"wellcare",grp:"Medicare (Part D & Advantage)",n:"Wellcare Medicare PDPs",t:"medicare",unl:"?",link:"https://www.wellcare.com/en/pdp-member/2026-classic-formulary",
+  list:"arn:3 budneb:4 alb:2 albneb:4 levaneb:4 spir:4 advh:3 bfg:3 trel:3",
+  notes:{spir:"Classic plan only.",albneb:"Value Plus: 0.083% is Tier 3."}},
+ {id:"none",grp:"No insurance",n:"Uninsured / paying cash",t:"uninsured",
+  note:"No formulary. Options are sorted by the lowest likely monthly cost: manufacturer caps, assistance programs, or discount-card cash prices."}
+];
+PLANS.forEach(p=>{p.map={};(p.list||"").split(/\s+/).filter(Boolean).forEach(x=>{const[k,v]=x.split(":");p.map[k]=v;});});
+
+const CLASS_NOTES={ics:"When switching, match the ICS dose level (low, medium, high).",icslaba:"When switching, match the ICS dose level (low, medium, high)."};
+const DRUG_NOTES={
+ bfg:"Formoterol-based: can be used as single maintenance and reliever therapy (SMART).",symb:"Formoterol-based: can be used as single maintenance and reliever therapy (SMART).",dul:"Formoterol-based: can be used as single maintenance and reliever therapy (SMART).",
+ fsd:"Salmeterol-based: not used for SMART.",advd:"Salmeterol-based: not used for SMART.",advh:"Salmeterol-based: not used for SMART.",fshfa:"Salmeterol-based: not used for SMART.",fsrc:"Salmeterol-based: not used for SMART.",
+ breo:"Vilanterol-based: not used for SMART.",fvg:"Vilanterol-based: not used for SMART.",
+ spir:"For asthma, only the 1.25 mcg Respimat is approved (2 puffs once daily, add-on). HandiHaler is COPD-only.",
+ trel:"Approved for asthma in adults (100 and 200 strengths).",
+ airs:"As-needed rescue for adults; not a maintenance inhaler. No same-class equivalent: consider a covered SABA, or ICS-formoterol as needed (SMART).",
+ qvar:"Breath-actuated: don't use with a spacer.",
+ budneb:"Usually for young children who can't use an MDI with spacer and mask.",pneb:"Usually for young children who can't use an MDI with spacer and mask."
+};
+const STATUS_OPTS=[["1","Tier 1"],["2","Tier 2"],["3","Tier 3"],["4","Tier 4"],["5","Tier 5"],["P","Preferred"],["NP","Non-preferred · PA"],["X","Not covered"],["?","Not on chart"]];
+const REJ_REASONS=["Not covered","Prior authorization required","Step therapy required","Quantity limit","Higher tier than shown","Other"];
+
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const state={plan:"bcbs4t",drug:"symb",str:1,cls:"all",role:"all",q:"",age:null,panel:null};
+try{const s=JSON.parse(localStorage.getItem("icf")||"{}");if(s.plan&&PLANS.some(p=>p.id===s.plan))state.plan=s.plan;}catch(e){}
+
+// Shared data (db). Base data above; overrides layer on top.
+const live={db:null,user:null,canEdit:false,canWrite:null,overrides:{},planmeta:{},rejections:[],dbReady:false,dbNote:""};
+
+function plan(){return PLANS.find(p=>p.id===state.plan)}
+function eligKey(t){return t==="pap"?"uninsured":t}
+function ov(p,d){return live.overrides[p.id+"__"+d.id]}
+function planLink(p){const m=live.planmeta[p.id];return (m&&m.link)||p.link||null}
+function planVerified(p){const m=live.planmeta[p.id];return m&&m.verified?m.verified:"May 2026 (UNC chart)"}
+function ageOk(d){return state.age==null||state.age>=d.min}
+
+function status(p,d){
+  if(p.t==="uninsured"){const e=effCash(d);return{code:"cash",rank:e?e.v:9999,label:e?("~$"+e.v+"/mo"):"Price n/a",cls:e?(e.v<=40?"s1":e.v<=120?"s2":e.v<=300?"s3":"s4"):"sun",txt:e?e.how:"No cash price or program listed."};}
+  const o=ov(p,d);let v=o?o.status:p.map[d.id];const listed=!!v;if(!v)v=p.unl;
+  let r;
+  if(v==="P")r={rank:1,label:"Preferred",cls:"s1",txt:"Preferred on this plan."};
+  else if(v==="NP")r={rank:50,label:"Non-pref · PA",cls:"snp",txt:listed?"Non-preferred. Prior authorization is required.":"Not on the preferred list, so it's non-preferred and needs prior authorization."};
+  else if(v==="X")r={rank:80,label:"Not covered",cls:"snp",txt:"Not on this formulary."};
+  else if(v==="?")r={rank:90,label:"Not on chart",cls:"sun",txt:"The source chart doesn't list it for this plan. It may be covered at a higher tier, need PA, or be excluded. Check the full formulary or run a test claim."};
+  else{const t=+v;const pa=p.tier2PA&&t===2;r={rank:t+(pa?.5:0),label:"Tier "+t+(pa?" · PA":""),cls:pa?"snp":t===1?"s1":t===2?"s2":t===3?"s3":"s4",txt:"Covered at Tier "+t+(pa?", with prior authorization.":t===1?", the lowest-cost tier.":".")};}
+  r.code=v;r.edited=o||null;return r;
+}
+function effCash(d){
+  let best=null;
+  (d.p||[]).forEach(k=>{const pr=PROGS[k];if(pr.cap&&pr.elig.includes("uninsured")&&(!best||pr.cap<best.v))best={v:pr.cap,how:"Through the "+pr.n+".",prog:pr}});
+  if(d.cash&&(!best||d.cash[0]<best.v))best={v:d.cash[0],how:"Cash price with a discount card (est. "+d.cash[1]+")."};
+  return best;
+}
+function curStrength(d){const s=STR[d.id];if(!s)return null;return s[Math.min(state.str,s.length-1)]}
+function matchStrength(alt,cur){
+  const s=STR[alt.id];if(!s||!cur)return null;
+  const want=cur[2];
+  return s.find(x=>x[2]===want)||s.find(x=>x[2].split("").some(c=>want.includes(c)))||null;
+}
+function alternatives(p,d){
+  const s=status(p,d);const cur=curStrength(d);
+  return DRUGS.filter(x=>x.c===d.c&&x.id!==d.id&&ageOk(x)).map(x=>({x,s:status(p,x),m:matchStrength(x,cur)}))
+    .filter(a=>a.s.rank<s.rank&&a.s.rank<50&&(!cur||!STR[a.x.id]||a.m)).sort((a,b)=>a.s.rank-b.s.rank||((MOL[b.x.id]&&MOL[b.x.id]===MOL[d.id])-(MOL[a.x.id]&&MOL[a.x.id]===MOL[d.id]))).slice(0,5);
+}
+function rejFor(p,d){return live.rejections.filter(r=>r.plan===p.id&&r.drug===d.id)}
+
+/* ---------- build controls ---------- */
+function buildControls(){
+  const sel=$("#plan");const groups={};
+  PLANS.forEach(p=>{(groups[p.grp]=groups[p.grp]||[]).push(p)});
+  sel.innerHTML=Object.entries(groups).map(([g,ps])=>`<optgroup label="${esc(g)}">${ps.map(p=>`<option value="${p.id}">${esc(p.n)}</option>`).join("")}</optgroup>`).join("");
+  sel.value=state.plan;
+  sel.addEventListener("change",()=>{state.plan=sel.value;state.panel=null;try{localStorage.setItem("icf",JSON.stringify({plan:state.plan}))}catch(e){}render()});
+  $("#q").addEventListener("input",e=>{state.q=e.target.value.toLowerCase().replace(/[\s\-\/]/g,"");renderList()});
+  $("#age").addEventListener("input",e=>{const v=e.target.value.trim();state.age=v===""?null:Math.max(0,+v);render()});
+  $("#role").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;state.role=b.dataset.r;state.cls="all";
+    $("#role").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x===b));buildFilters();renderList()});
+  buildFilters();
+}
+function buildFilters(){
+  const f=$("#filters");
+  const cs=CLASSES.filter(c=>state.role==="all"||c.role===state.role);
+  f.innerHTML=[{id:"all",name:"All classes"}].concat(cs).map(c=>`<button class="chipbtn" type="button" data-c="${c.id}" aria-pressed="${state.cls===c.id}">${esc(c.name)}</button>`).join("");
+  f.onclick=e=>{const b=e.target.closest("button");if(!b)return;state.cls=b.dataset.c;f.querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x===b));renderList()};
+}
+
+/* ---------- render ---------- */
+function renderPlan(){
+  const p=plan();const f=TYPE_FACTS[p.t];const link=planLink(p);
+  const editing=state.panel==="planmeta";
+  $("#planbox").innerHTML=`<span class="ptype">${TYPE_LABEL[p.t]}</span>
+  <div><h2>${esc(p.n)}</h2>${p.note?`<p>${esc(p.note)}</p>`:""}
+  <div class="facts"><span>${f[0]}: <b>${f[1]}</b></span>${p.card?`<span>Find on card: <b>${p.card}</b> (bottom right)</span>`:""}${p.t==="medicare"?`<span>2026 Part D cap: <b>$2,100</b></span>`:""}${p.t!=="uninsured"?`<span>Last verified: <b>${esc(planVerified(p))}</b></span>`:""}
+  ${p.t!=="uninsured"?(link?`<a href="${esc(link)}" target="_blank" rel="noopener">Full formulary ↗</a>`:`<span>No formulary link yet</span>`):""}
+  ${live.canEdit&&p.t!=="uninsured"?`<button class="btn quiet" type="button" data-act="planmeta" style="padding:4px 10px;font-size:13px">${editing?"Close":"Edit plan info"}</button>`:""}</div>
+  ${editing?`<form class="panel" id="planmetaform" style="margin-top:10px"><div class="two"><div><label class="lbl" for="pm-link">Formulary link</label><input id="pm-link" type="url" value="${esc(link||"")}" placeholder="https://"></div><div><label class="lbl" for="pm-ver">Last verified</label><input id="pm-ver" type="text" value="${esc(live.planmeta[p.id]?.verified||"")}" placeholder="e.g. Jan 2027 formulary"></div></div><div class="actions"><button class="btn" type="submit">Save plan info</button></div></form>`:""}
+  </div>`;
+}
+
+function renderList(){
+  const p=plan();let hidden=0;
+  const html=CLASSES.filter(c=>(state.role==="all"||c.role===state.role)&&(state.cls==="all"||state.cls===c.id)).map(c=>{
+    let ds=DRUGS.filter(d=>d.c===c.id).filter(d=>!state.q||(d.n+d.g).toLowerCase().replace(/[\s\-\/]/g,"").includes(state.q));
+    const before=ds.length;ds=ds.filter(ageOk);hidden+=before-ds.length;
+    if(!ds.length)return"";
+    ds=ds.map(d=>({d,s:status(p,d)})).sort((a,b)=>a.s.rank-b.s.rank||a.d.n.localeCompare(b.d.n));
+    return`<div class="cls"><h3>${esc(c.name)}<small>${ds.length} option${ds.length>1?"s":""}</small></h3><div class="rows">${ds.map(({d,s})=>{
+      const rj=rejFor(p,d).filter(r=>!r.resolved).length;
+      return`<button class="row" type="button" data-d="${d.id}" aria-current="${d.id===state.drug}"><span><span class="nm">${esc(d.n)}</span><span class="gn">${esc(d.g)}</span></span><span class="tags">${rj?`<span class="flag">${rj} rejected</span>`:""}${s.edited?`<span class="edited">Updated</span>`:""}<span class="st ${s.cls}">${s.label}</span></span></button>`}).join("")}</div></div>`;
+  }).join("");
+  $("#list").innerHTML=html||`<p class="empty">No inhalers match these filters.</p>`;
+  $("#agenote").textContent=state.age!=null&&hidden?`${hidden} hidden: below FDA-labeled age for ${state.age}`:"";
+}
+
+function programsFor(p,d){
+  const k=eligKey(p.t);const out=[];
+  (d.p||[]).forEach(id=>{const pr=PROGS[id];if(pr.elig.includes(k))out.push(`<li><b>${esc(pr.n)}</b><span>${esc(pr.d)} <a href="${pr.u}" target="_blank" rel="noopener">Program site</a></span></li>`)});
+  return out.join("")+generalTips(p,d).map(([a,b])=>`<li class="gen"><b>${esc(a)}</b><span>${esc(b)}</span></li>`).join("");
+}
+function generalTips(p,d){
+  const gen=[];const s=status(p,d);
+  if(p.t==="commercial"){
+    if(d.brand&&!(d.p||[]).some(x=>PROGS[x].elig.includes("commercial")))gen.push(["No manufacturer card listed","Consider a better-covered alternative, or ask the plan for a tier exception."]);
+    if(!d.brand&&d.cash)gen.push(["Compare a discount card with the copay","Est. cash "+d.cash[1]+". Cash fills don't count toward the deductible."]);
+    gen.push(["Ask about a 90-day supply","Often lowers the cost per month, especially by mail order."]);
+  }
+  if(p.t==="medicare"){
+    gen.push(["Manufacturer copay cards can't be used","Federal rules bar them with Medicare."]);
+    gen.push(["$2,100 out-of-pocket cap in 2026","Covers deductible, copays and coinsurance for covered Part D drugs; the deductible is at most $615."]);
+    gen.push(["Extra Help (Low-Income Subsidy)","For patients with limited income and resources; lowers copays and premiums."]);
+    gen.push(["Medicare Prescription Payment Plan","Spreads out-of-pocket drug costs into monthly payments."]);
+    if(s.rank>=3)gen.push(["Tiering exception","The prescriber can request a lower tier if covered alternatives aren't appropriate."]);
+    if(d.neb)gen.push(["Nebulized drugs usually bill to Part B","The pharmacy will need the diagnosis code and possibly the nebulizer purchase date."]);
+  }
+  if(p.t==="medicaid"){
+    gen.push(["Copay cards and most assistance programs don't apply","Medicaid copays are already low."]);
+    if(s.code==="NP")gen.push(["Submit prior authorization","Document trial and failure of preferred agents, or switch to a preferred option."]);
+  }
+  if(p.t==="tricare"){
+    gen.push(["Manufacturer copay cards can't be used","TRICARE is a federal program."]);
+    gen.push(["Use mail order","Preferred agents are covered through Express Scripts home delivery."]);
+    if(s.code==="NP")gen.push(["Submit prior authorization","Required for non-preferred agents."]);
+  }
+  if(p.t==="pap"){
+    if(s.code==="X")gen.push(["Off the PAP formulary","Switch to a listed option, or apply to a manufacturer program."]);
+    if(p.tier2PA&&s.code==="2")gen.push(["Tier 2 needs PA","Submit a PAP prior authorization request."]);
+  }
+  if(p.t==="uninsured"||p.t==="pap"){
+    gen.push(["Screen for coverage","Check eligibility for NC Medicaid or a Marketplace plan."]);
+    if(p.t==="uninsured")gen.push(["UNC Health patient?","Screen for the UNC Pharmacy Assistance Program."]);
+    if(d.cash)gen.push(["Discount-card cash price","Est. "+d.cash[1]+" (GoodRx, July 2026; varies by pharmacy)."]);
+  }
+  return gen;
+}
+
+function renderDetail(){
+  const p=plan();const d=D[state.drug];const s=status(p,d);
+  const strs=STR[d.id];const cur=curStrength(d);
+  const alts=alternatives(p,d);
+  const pn=p.notes&&p.notes[d.id];
+  const notes=[pn,s.edited&&s.edited.note?("Editor note: "+s.edited.note):null,DRUG_NOTES[d.id],CLASS_NOTES[d.c]].filter(Boolean);
+  const cls=CLASSES.find(c=>c.id===d.c).name;
+  const rj=rejFor(p,d).sort((a,b)=>(b.at||"").localeCompare(a.at||""));
+  const ageWarn=state.age!=null&&state.age<d.min?`FDA-labeled for ages ${d.min}+; this patient is ${state.age}.`:(state.age!=null&&d.max&&state.age>d.max?`Labeled for ages up to ${d.max}.`:"");
+  $("#detail").innerHTML=`<div class="dhead"><h2>${esc(d.n)}</h2><p>${esc(d.g)} · ${DEV[d.dev]} · FDA age ${d.min}+${d.max?" (to "+d.max+")":""}</p></div>
+  ${ageWarn?`<div class="warn">${esc(ageWarn)}</div>`:""}
+  <div class="verdict"><span class="st ${s.cls}">${s.label}</span><p>${esc(s.txt)}${s.edited?` <span class="edited">Updated ${esc(fmtDate(s.edited.at))}</span>`:""}</p></div>
+  <div class="actions">
+    <button class="btn" type="button" data-act="note">Copy note for chart</button>
+    <button class="btn ghost" type="button" data-act="handout">Patient handout</button>
+    ${live.db&&p.t!=="uninsured"?`<button class="btn quiet" type="button" data-act="reject">${state.panel==="reject"?"Cancel report":"This got rejected"}</button>`:""}
+    ${live.canEdit&&p.t!=="uninsured"?`<button class="btn quiet" type="button" data-act="edit">${state.panel==="edit"?"Close editor":"Edit coverage"}</button>`:""}
+  </div>
+  ${state.panel==="reject"?rejectForm():""}
+  ${state.panel==="edit"?editForm(p,d,s):""}
+  <section class="blk"><h4>${p.t==="uninsured"?"Lower-cost options":"Switch to"} · ${esc(cls)}</h4>
+    ${strs?`<div class="strength"><label for="str">Current strength</label><select id="str">${strs.map((x,i)=>`<option value="${i}" ${x===cur?"selected":""}>${esc(x[0])} · ${esc(x[1])} (${lvlText(x[2])} dose)</option>`).join("")}</select></div>`:""}
+    ${alts.length?`<div class="alts">${alts.map(({x,s,m})=>`<button class="alt" type="button" data-d="${x.id}" data-m="${m?STR[x.id].indexOf(m):""}"><span><span class="nm">${esc(x.n)}</span><span class="gn">${esc(x.g)} · ${DEV[x.dev]}</span>${m?`<span class="dose">${esc(m[0])} · ${esc(m[1])}</span>`:""}</span><span class="st ${s.cls}">${s.label}</span></button>`).join("")}</div>`
+      :`<p class="empty">${status(p,d).rank<=1?"This is already among the best-covered options in its class on this plan.":"No better-covered option in this class"+(cur?" at a matching dose":"")+(state.age!=null?" for this age":"")+"."}</p>`}
+    ${cur?`<p class="fine">Matched to the same ICS dose level (GINA, ages 12+). Confirm the regimen before prescribing.</p>`:""}
+  </section>
+  <section class="blk"><h4>Ways to lower the cost</h4><ul class="progs">${programsFor(p,d)||`<li class="gen"><b>No programs apply</b><span>Nothing listed for this coverage type.</span></li>`}</ul></section>
+  ${rj.length?`<section class="blk"><h4>Reported rejections on this plan</h4><ul class="rej">${rj.map(r=>`<li class="${r.resolved?"done":""}"><span><b>${esc(r.reason)}</b> · ${esc(fmtDate(r.at))}${r.resolved?" · resolved":""}${r.note?`<br>${esc(r.note)}`:""}</span>${live.canEdit&&!r.resolved?`<button type="button" data-resolve="${esc(r.id)}">Mark resolved</button>`:""}</li>`).join("")}</ul></section>`:""}
+  ${notes.length?`<section class="blk"><h4>Notes</h4><ul class="notes">${notes.map(n=>`<li>${esc(n)}</li>`).join("")}</ul></section>`:""}
+  ${live.dbNote?`<p class="fine">${esc(live.dbNote)}</p>`:""}`;
+  const sel=$("#str");if(sel)sel.addEventListener("change",e=>{state.str=+e.target.value;renderDetail()});
+}
+function rejectForm(){
+  if(!live.db)return`<div class="panel"><p class="empty">Reporting needs a signed-in view of this app on claude.ai.</p></div>`;
+  if(live.canWrite===false)return`<div class="panel"><p class="empty">You have view-only access, so you can't file reports. Ask the owner for Contributor access.</p></div>`;
+  return`<form class="panel" id="rejform"><div><label class="lbl" for="rj-reason">What happened at the pharmacy?</label><select id="rj-reason">${REJ_REASONS.map(r=>`<option>${r}</option>`).join("")}</select></div>
+  <div><label class="lbl" for="rj-note">Details (optional)</label><textarea id="rj-note" maxlength="300" placeholder="e.g. Rejected code 75, PA needed for 160/4.5. No patient names or identifiers."></textarea></div>
+  <div class="actions"><button class="btn" type="submit">Submit report</button></div></form>`;
+}
+function editForm(p,d,s){
+  const cur=s.edited?s.edited.status:(p.map[d.id]||p.unl);
+  return`<form class="panel" id="editform"><div class="two"><div><label class="lbl" for="ed-status">Coverage on ${esc(p.n)}</label><select id="ed-status">${STATUS_OPTS.map(([v,l])=>`<option value="${v}" ${v===cur?"selected":""}>${l}</option>`).join("")}</select></div>
+  <div><label class="lbl" for="ed-note">Note (optional)</label><input id="ed-note" type="text" maxlength="200" value="${esc(s.edited?.note||"")}" placeholder="e.g. Confirmed by test claim"></div></div>
+  <div class="actions"><button class="btn" type="submit">Save for everyone</button>${s.edited?`<button class="btn quiet" type="button" data-act="revert">Revert to chart (${esc(labelFor(p.map[d.id]||p.unl))})</button>`:""}</div>
+  <p class="fine">Chart says: ${esc(labelFor(p.map[d.id]||p.unl))}.</p></form>`;
+}
+function labelFor(v){const o=STATUS_OPTS.find(x=>x[0]===v);return o?o[1]:v}
+function fmtDate(iso){if(!iso)return"";const d=new Date(iso);return isNaN(d)?"":d.toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"})}
+function render(){renderPlan();renderList();renderDetail()}
+
+/* ---------- note & handout ---------- */
+function buildNote(){
+  const p=plan();const d=D[state.drug];const s=status(p,d);const cur=curStrength(d);const alts=alternatives(p,d);
+  const k=eligKey(p.t);const progs=(d.p||[]).map(x=>PROGS[x]).filter(x=>x.elig.includes(k));
+  const L=[];
+  L.push("Inhaler coverage check — "+new Date().toLocaleDateString());
+  L.push("Plan: "+p.n+(p.t!=="uninsured"?" ("+TYPE_LABEL[p.t]+")":""));
+  L.push("Requested: "+d.n+(cur?" "+cur[0]+", "+cur[1]:"")+" — "+s.label+(s.code==="?"?" (not listed in source chart; verify)":""));
+  if(alts.length){L.push("Better-covered options"+(cur?" (same "+lvlText(cur[2])+" ICS dose level)":"")+":");
+    alts.forEach(a=>L.push("  • "+a.x.n+(a.m?" "+a.m[0]+", "+a.m[1]:"")+" — "+a.s.label));}
+  else L.push("No better-covered option in this class on this plan.");
+  if(progs.length){L.push("Savings:");progs.forEach(pr=>L.push("  • "+pr.n+" — "+pr.site));}
+  const tips=generalTips(p,d).filter(t=>/prior authorization|PA|exception|Part B|copay cards/i.test(t[0]));
+  tips.forEach(t=>L.push("Note: "+t[0]+". "+t[1]));
+  const rj=rejFor(p,d).filter(r=>!r.resolved);if(rj.length)L.push("Heads-up: "+rj.length+" recent pharmacy rejection(s) reported for this drug on this plan ("+rj[0].reason+").");
+  L.push("Source: UNC Pulmonary 2026 formulary chart"+(s.edited?" + local update "+fmtDate(s.edited.at):"")+". Verify with the plan formulary or a test claim.");
+  return L.join("\n");
+}
+const PT_CLASS={
+ saba:"This is a rescue inhaler. Use it when you have symptoms like coughing, wheezing, or a tight chest.",
+ icssaba:"This is a rescue inhaler that also has a steroid in it. Use it when you have symptoms like coughing, wheezing, or a tight chest.",
+ ics:"This is a controller inhaler. It has a steroid that calms swelling in your airways. Use it every day, even when you feel fine.",
+ icslaba:"This is a controller inhaler with two medicines: a steroid to calm swelling and a long-acting medicine to keep airways open. Use it every day, even when you feel fine.",
+ lama:"This is an add-on controller inhaler. It helps keep your airways open. Use it once a day, every day.",
+ triple:"This is a controller inhaler with three medicines. Use it once a day, every day, even when you feel fine."
+};
+const PT_DEV={
+ mdi:["Shake the inhaler before each puff.","Use a spacer if you have one. It helps more medicine reach your lungs.","Breathe in slowly and deeply, then hold your breath for about 10 seconds."],
+ bai:["Don't shake it and don't use a spacer.","Close your lips around the mouthpiece and breathe in deeply. It sprays on its own."],
+ dpi:["Don't shake it.","Breathe out away from the inhaler first.","Breathe in fast and deep through your mouth."],
+ dpi1:["Don't shake it.","Breathe out away from the inhaler first.","Breathe in fast and deep through your mouth.","Use it at the same time every day."],
+ smi:["Breathe in slowly and deeply while you press the button.","Hold your breath for about 10 seconds."],
+ neb:["Use the mask or mouthpiece as shown.","Keep breathing normally until the mist stops (about 5 to 10 minutes).","Clean the parts after each use."]
+};
+function handoutData(){
+  const p=plan();const d=D[state.drug];const s=status(p,d);const cur=curStrength(d);
+  const k=eligKey(p.t);const progs=(d.p||[]).map(x=>PROGS[x]).filter(x=>x.elig.includes(k));
+  let cost="";
+  if(p.t==="uninsured"){const e=effCash(d);cost=e?(e.prog?"You may be able to pay about $"+e.v+" a month through the program below.":"With a free discount card (like GoodRx), it may cost about "+d.cash[1].replace(" generic","")+". Prices vary by pharmacy."):"Ask your pharmacist about the price.";}
+  else if(s.code==="P"||s.code==="1")cost="Your plan prefers this inhaler. It is usually on your lowest copay level.";
+  else if(/^[2-5]$/.test(s.code))cost="Your plan covers this inhaler at level (tier) "+s.code+". Higher tiers usually cost more. "+(p.tier2PA&&s.code==="2"?"Your care team must send an approval request first.":"");
+  else if(s.code==="NP")cost="Your plan needs an approval from your care team (prior authorization) before it will pay for this inhaler.";
+  else if(s.code==="X")cost="This inhaler is not on your program's list. Ask your care team about a covered option.";
+  else cost="Check with your pharmacy about your cost for this inhaler.";
+  if(p.t==="medicare")cost+=" In 2026, Medicare drug plans cap what you pay for covered drugs at $2,100 for the year.";
+  const saves=progs.map(pr=>pr.pt+" — "+pr.site);
+  if(p.t==="commercial"&&!d.brand)saves.push("Ask the pharmacy to compare your copay with a free discount card price.");
+  if(p.t==="medicare")saves.push("Extra Help from Medicare can lower drug costs if your income is limited. Call Social Security at 1-800-772-1213.");
+  if(p.t==="uninsured")saves.push("Ask our team if you may qualify for Medicaid or the UNC Pharmacy Assistance Program.");
+  if(p.t!=="uninsured")saves.push("Ask about a 90-day supply. It can cost less per month.");
+  const tips=[...(PT_DEV[d.dev]||[])];
+  if(d.ics)tips.push("Rinse your mouth with water and spit after each use. This helps prevent mouth infections.");
+  return{p,d,cur,cost,saves,tips,what:PT_CLASS[d.c]};
+}
+function handoutHTML(h){
+  return`<div class="handout"><h4>Your inhaler</h4>
+  <p class="big">${esc(h.d.n)}${h.cur?" "+esc(h.cur[0]):""}</p>
+  ${h.cur?`<p><b>How to take it:</b> ${esc(h.cur[1])}, or as your care team tells you.</p>`:""}
+  <p>${esc(h.what)}</p>
+  <h5>What it may cost</h5><p>${esc(h.cost)}</p>
+  ${h.saves.length?`<h5>Ways to save</h5><ul>${h.saves.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`:""}
+  <h5>How to use it</h5><ul>${h.tips.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>
+  <h5>Get help right away if</h5><ul><li>Your rescue inhaler isn't helping, or you need it more than usual.</li><li>You have trouble talking or walking because you're short of breath. Call 911.</li></ul>
+  <p class="small">Insurance: ${esc(h.p.n)}. Coverage can change. Bring this sheet to your pharmacy if you have questions.</p></div>`;
+}
+function handoutText(h){
+  return["Your inhaler: "+h.d.n+(h.cur?" "+h.cur[0]:""),h.cur?"How to take it: "+h.cur[1]+", or as your care team tells you.":"",h.what,"","What it may cost: "+h.cost,"",
+   h.saves.length?"Ways to save:\n"+h.saves.map(x=>"- "+x).join("\n"):"","","How to use it:\n"+h.tips.map(x=>"- "+x).join("\n"),"",
+   "Get help right away if your rescue inhaler isn't helping, or you have trouble talking or walking because you're short of breath (call 911)."].filter((x,i,a)=>x!==""||a[i-1]!=="").join("\n");
+}
+function handoutPDF(h){
+  const {jsPDF}=window.jspdf;const doc=new jsPDF({unit:"pt",format:"letter"});
+  const W=612,M=56;let y=64;
+  const line=(txt,size=12,bold=false,color=[26,36,33],gap=6)=>{doc.setFont("helvetica",bold?"bold":"normal");doc.setFontSize(size);doc.setTextColor(...color);
+    doc.splitTextToSize(txt,W-2*M).forEach(l=>{if(y>740){doc.addPage();y=64}doc.text(l,M,y);y+=size*1.35});y+=gap};
+  const head=t=>{y+=6;line(t.toUpperCase(),11,true,[23,79,67],2)};
+  const list=arr=>arr.forEach(x=>line("•  "+x,12,false,[26,36,33],2));
+  line("Your inhaler",22,true,[23,79,67],4);
+  line(h.d.n+(h.cur?" "+h.cur[0]:""),16,true);
+  if(h.cur)line("How to take it: "+h.cur[1]+", or as your care team tells you.");
+  line(h.what);
+  head("What it may cost");line(h.cost);
+  if(h.saves.length){head("Ways to save");list(h.saves)}
+  head("How to use it");list(h.tips);
+  head("Get help right away if");list(["Your rescue inhaler isn't helping, or you need it more than usual.","You have trouble talking or walking because you're short of breath. Call 911."]);
+  y+=8;line("Insurance: "+h.p.n+". Coverage can change. Bring this sheet to your pharmacy if you have questions.",10,false,[79,92,88]);
+  return doc.output("blob");
+}
+let downloadsNS;
+async function getDownloads(){return{save:async({filename,data})=>{const u=URL.createObjectURL(data);const a=document.createElement("a");a.href=u;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),2000);return{status:"saved"}}}}
+
+function openModal(kind){
+  const root=$("#modalroot");let body="";
+  if(kind==="note"){
+    const t=buildNote();
+    body=`<h3>Note for the chart</h3><pre id="notetext">${esc(t)}</pre><div class="actions"><button class="btn" type="button" data-copy="notetext">Copy note</button><button class="btn quiet" type="button" data-close>Close</button></div><p class="fine">Plain text, ready to paste into the chart, an In Basket message, or a PA request.</p>`;
+  }else{
+    const h=handoutData();window.__h=h;
+    body=`<h3>Patient handout</h3>${handoutHTML(h)}<pre id="handtext" hidden>${esc(handoutText(h))}</pre><div class="actions"><button class="btn" type="button" data-act="savepdf" id="pdfbtn">Save as PDF</button><button class="btn ghost" type="button" data-copy="handtext">Copy text for MyChart</button><button class="btn quiet" type="button" data-close>Close</button></div><p class="fine" id="pdfmsg">The PDF downloads ready to print and hand to the patient. Select a different inhaler or strength first if you're switching.</p>`;
+  }
+  root.innerHTML=`<div class="modal" data-scrim><div class="sheet" role="dialog" aria-modal="true">${body}</div></div>`;
+  root.querySelector("[data-close]").focus();
+  if(kind==="handout")getDownloads().then(ns=>{if(!ns||!window.jspdf){const b=$("#pdfbtn");if(b){b.hidden=true;$("#pdfmsg").textContent="Saving files isn't available in this view. Copy the text instead."}}});
+}
+function closeModal(){$("#modalroot").innerHTML=""}
+function toast(msg){const t=document.createElement("div");t.className="toast";t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),2600)}
+async function copyFrom(id){
+  const el=document.getElementById(id);const text=el.textContent;
+  try{await navigator.clipboard.writeText(text);toast("Copied")}
+  catch(e){el.hidden=false;const r=document.createRange();r.selectNodeContents(el);const s=getSelection();s.removeAllRanges();s.addRange(r);toast("Selected. Press Ctrl+C or ⌘C to copy.")}
+}
+
+/* ---------- events ---------- */
+document.addEventListener("click",async e=>{
+  if(e.target.matches("[data-scrim]")||e.target.closest("[data-close]")){closeModal();return}
+  const cp=e.target.closest("[data-copy]");if(cp){copyFrom(cp.dataset.copy);return}
+  const rs=e.target.closest("[data-resolve]");if(rs){resolveRej(rs.dataset.resolve);return}
+  const a=e.target.closest("[data-act]");
+  if(a){const act=a.dataset.act;
+    if(act==="note"||act==="handout")openModal(act);
+    else if(act==="reject"||act==="edit"){state.panel=state.panel===act?null:act;renderDetail()}
+    else if(act==="planmeta"){state.panel=state.panel==="planmeta"?null:"planmeta";renderPlan()}
+    else if(act==="revert")revertOverride();
+    else if(act==="savepdf")savePDF();
+    return}
+  const b=e.target.closest("[data-d]");if(!b)return;
+  const nd=b.dataset.d;
+  if(b.classList.contains("alt")&&b.dataset.m!=="")state.str=+b.dataset.m;
+  else if(nd!==state.drug){const s=STR[nd];state.str=s?Math.min(1,s.length-1):0;}
+  state.drug=nd;state.panel=null;renderList();renderDetail();
+  if(window.matchMedia("(max-width:860px)").matches)$("#detail").scrollIntoView({behavior:window.matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth",block:"start"});
+});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&$("#modalroot").innerHTML)closeModal()});
+document.addEventListener("submit",async e=>{
+  e.preventDefault();
+  if(e.target.id==="rejform")submitRej();
+  if(e.target.id==="editform")saveOverride();
+  if(e.target.id==="planmetaform")savePlanMeta();
+});
+
+async function savePDF(){
+  const ns=await getDownloads();const h=window.__h;if(!ns||!h)return;
+  try{const blob=handoutPDF(h);const name="Inhaler handout - "+h.d.n.replace(/[^\w\s-]/g,"")+".pdf";await ns.save({filename:name,data:blob});toast("Downloaded")}
+  catch(err){if(err&&err.code==="declined")return;if(err&&err.code==="rate_limited"){toast("A save prompt is already open");return}toast("Couldn't save the PDF. Copy the text instead.")}
+}
+
+/* ---------- shared data ---------- */
+async function submitRej(){
+  const p=plan();const d=D[state.drug];
+  const body={plan:p.id,drug:d.id,reason:$("#rj-reason").value,note:$("#rj-note").value.trim().slice(0,300),at:new Date().toISOString(),resolved:false};
+  try{if(live.user){const id=await live.user.id();if(id)body.by=id}}catch(e){}
+  try{await live.db.collection("rejections").add(body);state.panel=null;toast("Report saved. Thanks.");renderDetail()}
+  catch(err){if(err&&err.code==="invalid_argument"){live.canWrite=false;renderDetail();return}toast(err&&err.code==="quota_exceeded"?"Report storage is full. Ask an editor to clear old reports.":"Couldn't save the report. Try again.")}
+}
+async function resolveRej(id){
+  try{await live.db.doc("rejections/"+id).update({resolved:true});toast("Marked resolved")}catch(e){toast("Couldn't update that report.")}
+}
+async function saveOverride(){
+  const p=plan();const d=D[state.drug];
+  const body={plan:p.id,drug:d.id,status:$("#ed-status").value,note:$("#ed-note").value.trim().slice(0,200),at:new Date().toISOString()};
+  try{if(live.user){const id=await live.user.id();if(id)body.by=id}}catch(e){}
+  try{await live.db.doc("overrides/"+p.id+"__"+d.id).set(body);state.panel=null;toast("Saved for everyone");render()}
+  catch(e){toast("Couldn't save. Only editors can change coverage.")}
+}
+async function revertOverride(){
+  const p=plan();const d=D[state.drug];
+  try{await live.db.doc("overrides/"+p.id+"__"+d.id).delete();state.panel=null;toast("Reverted to chart")}catch(e){toast("Couldn't revert.")}
+}
+async function savePlanMeta(){
+  const p=plan();const body={link:$("#pm-link").value.trim(),verified:$("#pm-ver").value.trim(),at:new Date().toISOString()};
+  try{await live.db.doc("planmeta/"+p.id).set(body);state.panel=null;toast("Plan info saved");renderPlan()}catch(e){toast("Couldn't save plan info.")}
+}
+
+async function initLive(){
+  if(!window.claude||!window.claude.use){return}
+  try{live.user=await window.claude.use("user")}catch(e){live.user=null}
+  if(live.user){
+    try{live.canEdit=!!(await live.user.canEdit())}catch(e){live.canEdit=false}
+    try{const w=await live.user.can("data.write");live.canWrite=w==null?null:!!w}catch(e){}
+  }
+  try{live.db=await window.claude.use("db")}catch(e){live.db=null}
+  if(!live.db){render();return}
+  const timer=setTimeout(()=>{if(!live.dbReady){live.dbNote="Shared updates can't be reached yet; showing chart data.";renderDetail()}},10000);
+  const done=()=>{if(!live.dbReady){live.dbReady=true;clearTimeout(timer);if(live.dbNote){live.dbNote="";}}};
+  const fail=()=>{clearTimeout(timer);live.dbNote="Shared updates are unavailable right now; showing chart data.";renderDetail()};
+  live.db.collection("overrides").onSnapshot(snap=>{const m={};snap.docs.forEach(x=>{const v=x.data();if(v&&v.plan&&v.drug)m[v.plan+"__"+v.drug]=v});live.overrides=m;if(!snap.metadata.fromCache)done();renderPlan();renderList();if(!state.panel)renderDetail()},fail);
+  live.db.collection("planmeta").onSnapshot(snap=>{const m={};snap.docs.forEach(x=>{m[x.id]=x.data()});live.planmeta=m;if(state.panel!=="planmeta")renderPlan()},()=>{});
+  live.db.collection("rejections").orderBy("at","desc").limit(500).onSnapshot(snap=>{live.rejections=snap.docs.map(x=>Object.assign({id:x.id},x.data()));renderList();if(state.panel!=="reject"&&state.panel!=="edit")renderDetail()},()=>{});
+  render();
+}
+
+buildControls();render();initLive();
+</script>
+
+</body>
+</html>
